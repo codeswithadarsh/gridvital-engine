@@ -418,6 +418,46 @@ const callNextPatient = asyncHandler(async (req, res) => {
   });
 });
 
+const getConsultationStatus = asyncHandler(async (req, res) => {
+  const clinicId = req.clinicId;
+
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const [current, next] = await Promise.all([
+    Token.findOne({
+      clinicId,
+      visitDate: { $gte: startOfDay },
+      status: "In-Consultation",
+    }).populate("patientId", "name"),
+    Token.findOne({
+      clinicId,
+      visitDate: { $gte: startOfDay },
+      status: "Waiting",
+    }).sort({ tokenNumber: 1 }).populate("patientId", "name"),
+  ]);
+
+  if (!current && !next) {
+    res.status(200).json({
+      success: false,
+      message: "Queue is empty",
+    });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      current: current
+        ? { tokenNumber: current.tokenNumber, patientName: current.patientId?.name }
+        : null,
+      next: next
+        ? { tokenNumber: next.tokenNumber, patientName: next.patientId?.name }
+        : null,
+    },
+  });
+});
+
 module.exports = {
   registerClinic,
   verifyOtp,
@@ -430,4 +470,5 @@ module.exports = {
   getDashboardMetrics,
   getClinicPublicProfile,
   callNextPatient,
+  getConsultationStatus,
 };

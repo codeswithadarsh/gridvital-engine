@@ -12,6 +12,7 @@ const {
   getDashboardMetrics,
   getClinicPublicProfile,
   callNextPatient,
+  getConsultationStatus,
 } = require("../controllers/clinicController");
 const { protectClinic } = require("../middlewares/authMiddleware");
 const {
@@ -31,5 +32,6 @@ router.post("/forgot-password", otpRegistrationLimiter, sendResetOtp);
 router.post("/reset-password", otpVerificationLimiter, resetPassword);
 router.get("/dashboard-metrics", protectClinic, getDashboardMetrics);
 router.post("/call-next", protectClinic, callNextPatient);
+router.get("/consultation-status", protectClinic, getConsultationStatus);
 
 module.exports = router;
