@@ -10,6 +10,8 @@ const {
   sendResetOtp,
   resetPassword,
   getDashboardMetrics,
+  getClinicPublicProfile,
+  callNextPatient,
 } = require("../controllers/clinicController");
 const { protectClinic } = require("../middlewares/authMiddleware");
 const {
@@ -18,6 +20,7 @@ const {
   authLimiter,
 } = require("../middlewares/rateLimiter");
 
+router.get("/public/:clinicDisplayId", getClinicPublicProfile);
 router.get("/", getAllClinics);
 router.post("/register", otpRegistrationLimiter, registerClinic);
 router.post("/verify-otp", otpVerificationLimiter, verifyOtp);
@@ -27,5 +30,6 @@ router.put("/setup-profile", protectClinic, setupProfile);
 router.post("/forgot-password", otpRegistrationLimiter, sendResetOtp);
 router.post("/reset-password", otpVerificationLimiter, resetPassword);
 router.get("/dashboard-metrics", protectClinic, getDashboardMetrics);
+router.post("/call-next", protectClinic, callNextPatient);
 
 module.exports = router;

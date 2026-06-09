@@ -4,8 +4,13 @@ const Clinic = require("../models/Clinic");
 const asyncHandler = require("../utils/asyncHandler");
 
 const qrRegister = asyncHandler(async (req, res) => {
-  const { clinicDisplayId, name, phone, email, gender, age, chiefComplaints } =
+  const { clinicDisplayId, name, phone, email, gender, age, chiefComplaints, isConsent } =
     req.body;
+
+  if (!isConsent) {
+    res.status(400);
+    throw new Error("Accept terms to proceed");
+  }
 
   if (!clinicDisplayId || !name || !phone || !gender || age === undefined) {
     res.status(400);
@@ -22,25 +27,34 @@ const qrRegister = asyncHandler(async (req, res) => {
 
   const clinicId = clinic._id;
 
-  let patient = await Patient.findOne({ phone, clinicId });
-
-  if (!patient) {
-    patient = await Patient.create({
-      name,
-      phone,
-      email,
-      gender,
-      age,
-      clinicId,
-    });
-  }
-
   const now = new Date();
   const startOfDay = new Date(
     now.getFullYear(),
     now.getMonth(),
     now.getDate()
   );
+
+  const existingPatient = await Patient.findOne({ phone, clinicId });
+  if (existingPatient) {
+    const duplicateToken = await Token.findOne({
+      clinicId,
+      patientId: existingPatient._id,
+      visitDate: { $gte: startOfDay },
+    });
+    if (duplicateToken) {
+      res.status(409);
+      throw new Error("This phone number has already been registered today");
+    }
+  }
+
+  const patient = await Patient.create({
+    name,
+    phone,
+    email,
+    gender,
+    age,
+    clinicId,
+  });
 
   const lastToken = await Token.findOne({
     clinicId,
@@ -55,7 +69,8 @@ const qrRegister = asyncHandler(async (req, res) => {
     patientId: patient._id,
     chiefComplaints: chiefComplaints || "",
     status: "Waiting",
-    consultationFeeCharged: clinic.defaultConsultationFee,
+    consultationFeeCharged: clinic.defaultConsultationFee || 0,
+    isConsent,
   });
 
   res.status(201).json({
