@@ -1,10 +1,47 @@
 const crypto = require("crypto");
 const Clinic = require("../models/Clinic");
+const Patient = require("../models/Patient");
 const Token = require("../models/Token");
 const { generateToken } = require("../utils/tokenUtils");
 const sendEmail = require("../utils/sendEmail");
 const verifyEmailOTPTemplate = require("../utils/emailTemplates/sendVerifyEmailOTP");
 const asyncHandler = require("../utils/asyncHandler");
+
+const getPastPrescriptions = async (currentToken, clinicId) => {
+  const currentName = currentToken.patientId.name;
+  const currentPhone = currentToken.patientId.phone;
+  const currentTokenId = currentToken._id;
+
+  const nameWords = currentName.split(/\s+/).filter(Boolean);
+  const escapedWords = nameWords.map((w) =>
+    w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  );
+  const nameConditions = escapedWords.map((word) => ({
+    name: { $regex: word, $options: "i" },
+  }));
+
+  const relatedPatients = await Patient.find({
+    clinicId,
+    phone: currentPhone,
+    $or: nameConditions,
+  }).select("_id");
+
+  const relatedPatientIds = relatedPatients.map((p) => p._id);
+
+  const pastTokens = await Token.find({
+    patientId: { $in: relatedPatientIds },
+    clinicId,
+    prescription: { $exists: true, $ne: "" },
+    _id: { $ne: currentTokenId },
+  })
+    .sort({ visitDate: -1 })
+    .select("prescription visitDate");
+
+  return pastTokens.map((t) => ({
+    prescription: t.prescription,
+    date: t.visitDate,
+  }));
+};
 
 const registerClinic = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
@@ -305,8 +342,7 @@ const getDashboardMetrics = asyncHandler(async (req, res) => {
     Clinic.findById(clinicId).select("clinicDisplayId"),
 
     Token.find({ clinicId, visitDate: { $gte: startOfDay } })
-      .sort({ tokenNumber: 1 })
-      .populate("patientId", "name phone"),
+      .sort({ tokenNumber: 1 }),
 
     Token.countDocuments({ clinicId, visitDate: { $gte: startOfDay } }),
 
@@ -330,21 +366,6 @@ const getDashboardMetrics = asyncHandler(async (req, res) => {
 
   const liveTokenCounter = activeToken ? `#${activeToken.tokenNumber}` : 0;
 
-  const statusMap = {
-    Waiting: "pending",
-    "In-Consultation": "pending",
-    Completed: "completed",
-    Cancelled: "cancelled",
-  };
-
-  const patients = tokens.map((t) => ({
-    token: `#${t.tokenNumber}`,
-    name: t.patientId?.name || null,
-    phone: t.patientId?.phone || null,
-    complaints: t.chiefComplaints || null,
-    status: t.status,
-  }));
-
   const todayRevenue =
     "₹" + (todayRevenueResult[0]?.total || 0).toLocaleString("en-IN");
 
@@ -356,8 +377,191 @@ const getDashboardMetrics = asyncHandler(async (req, res) => {
       monthlyTotalPatients,
       todayRevenue,
       clinicDisplayId: clinic?.clinicDisplayId || null,
-      patients,
     },
+  });
+});
+
+const getTodayPatients = asyncHandler(async (req, res) => {
+  const clinicId = req.clinicId;
+
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const tokens = await Token.find({ clinicId, visitDate: { $gte: startOfDay } })
+    .sort({ tokenNumber: 1 })
+    .populate("patientId", "name phone");
+
+  const patients = tokens.map((t) => ({
+    id: t._id,
+    token: `#${t.tokenNumber}`,
+    name: t.patientId?.name || null,
+    phone: t.patientId?.phone || null,
+    complaints: t.chiefComplaints || null,
+    status: t.status,
+  }));
+
+  res.json({ success: true, data: patients });
+});
+
+const getTodayPatientDetails = asyncHandler(async (req, res) => {
+  const clinicId = req.clinicId;
+  const { tokenId } = req.body;
+
+  if (!tokenId) {
+    res.status(400);
+    throw new Error("tokenId is required");
+  }
+
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const token = await Token.findOne({
+    _id: tokenId,
+    clinicId,
+    visitDate: { $gte: startOfDay },
+  }).populate("patientId", "name age gender email");
+
+  if (!token) {
+    res.status(404);
+    throw new Error("Token not found for today");
+  }
+
+  const pastPrescriptions = await getPastPrescriptions(token, clinicId);
+
+  res.json({
+    success: true,
+    data: {
+      patientId: token.patientId._id,
+      name: token.patientId.name,
+      age: token.patientId.age,
+      gender: token.patientId.gender,
+      email: token.patientId.email,
+      tokenNumber: token.tokenNumber,
+      status: token.status,
+      visitDate: token.visitDate,
+      isConsent: token.isConsent,
+      chiefComplaints: token.chiefComplaints || null,
+      pastPrescriptions,
+    },
+  });
+});
+
+const addPrescription = asyncHandler(async (req, res) => {
+  const clinicId = req.clinicId;
+  const { tokenId, prescription, fees } = req.body;
+
+  if (!tokenId) {
+    res.status(400);
+    throw new Error("tokenId is required");
+  }
+
+  const token = await Token.findOne({
+    _id: tokenId,
+    clinicId,
+    status: "In-Consultation",
+  });
+
+  if (!token) {
+    res.status(404);
+    throw new Error("No In-Consultation token found");
+  }
+
+  if (prescription !== undefined) token.prescription = prescription;
+  if (fees !== undefined) token.consultationFeeCharged = fees;
+
+  await token.save();
+
+  res.json({ success: true, message: "Saved successfully" });
+});
+
+const getPatientAllDetails = asyncHandler(async (req, res) => {
+  const clinicId = req.clinicId;
+  const { tokenId } = req.body;
+
+  if (!tokenId) {
+    res.status(400);
+    throw new Error("tokenId is required");
+  }
+
+  const token = await Token.findOne({
+    _id: tokenId,
+    clinicId,
+  }).populate("patientId", "name age gender email");
+
+  if (!token) {
+    res.status(404);
+    throw new Error("Token not found");
+  }
+
+  const pastPrescriptions = await getPastPrescriptions(token, clinicId);
+
+  res.json({
+    success: true,
+    data: {
+      patientId: token.patientId._id,
+      name: token.patientId.name,
+      age: token.patientId.age,
+      gender: token.patientId.gender,
+      email: token.patientId.email,
+      tokenNumber: token.tokenNumber,
+      status: token.status,
+      visitDate: token.visitDate,
+      isConsent: token.isConsent,
+      chiefComplaints: token.chiefComplaints || null,
+      pastPrescriptions,
+    },
+  });
+});
+
+const getPatientHistory = asyncHandler(async (req, res) => {
+  const clinicId = req.clinicId;
+  const { name, phone, page = 1, pageSize = 20 } = req.body;
+
+  const p = Math.max(1, parseInt(page) || 1);
+  const ps = Math.min(100, Math.max(1, parseInt(pageSize) || 20));
+
+  const patientQuery = { clinicId };
+  if (name || phone) {
+    patientQuery.$or = [];
+    if (name) patientQuery.$or.push({ name: { $regex: name, $options: "i" } });
+    if (phone) patientQuery.$or.push({ phone: { $regex: phone, $options: "i" } });
+  }
+
+  const patients = await Patient.find(patientQuery).select("_id");
+  const patientIds = patients.map((p) => p._id);
+
+  if (patientIds.length === 0) {
+    return res.json({ success: true, data: [], total: 0, page: p, pageSize: ps, totalPages: 0 });
+  }
+
+  const [tokens, total] = await Promise.all([
+    Token.find({ clinicId, patientId: { $in: patientIds } })
+      .sort({ visitDate: -1 })
+      .skip((p - 1) * ps)
+      .limit(ps)
+      .populate("patientId", "name phone"),
+    Token.countDocuments({ clinicId, patientId: { $in: patientIds } }),
+  ]);
+
+  const data = tokens.map((t) => ({
+    tokenId: t._id,
+    tokenNumber: t.tokenNumber,
+    status: t.status,
+    visitDate: t.visitDate,
+    patient: {
+      id: t.patientId._id,
+      name: t.patientId.name,
+      phone: t.patientId.phone,
+    },
+  }));
+
+  res.json({
+    success: true,
+    data,
+    total,
+    page: p,
+    pageSize: ps,
+    totalPages: Math.ceil(total / ps),
   });
 });
 
@@ -449,10 +653,10 @@ const getConsultationStatus = asyncHandler(async (req, res) => {
     success: true,
     data: {
       current: current
-        ? { tokenNumber: current.tokenNumber, patientName: current.patientId?.name }
+        ? { tokenId: current._id, tokenNumber: current.tokenNumber, patientName: current.patientId?.name }
         : null,
       next: next
-        ? { tokenNumber: next.tokenNumber, patientName: next.patientId?.name }
+        ? { tokenId: next._id, tokenNumber: next.tokenNumber, patientName: next.patientId?.name }
         : null,
     },
   });
@@ -468,6 +672,11 @@ module.exports = {
   sendResetOtp,
   resetPassword,
   getDashboardMetrics,
+  getTodayPatients,
+  getTodayPatientDetails,
+  addPrescription,
+  getPatientAllDetails,
+  getPatientHistory,
   getClinicPublicProfile,
   callNextPatient,
   getConsultationStatus,

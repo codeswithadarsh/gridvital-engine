@@ -22,6 +22,7 @@ const tokenSchema = new mongoose.Schema(
     visitDate: { type: Date, default: Date.now },
     consultationFeeCharged: { type: Number, required: true },
     isConsent: { type: Boolean, default: false },
+    prescription: { type: String },
   },
   { timestamps: true }
 );

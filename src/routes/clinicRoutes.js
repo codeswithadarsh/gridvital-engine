@@ -10,6 +10,11 @@ const {
   sendResetOtp,
   resetPassword,
   getDashboardMetrics,
+  getTodayPatients,
+  getTodayPatientDetails,
+  addPrescription,
+  getPatientAllDetails,
+  getPatientHistory,
   getClinicPublicProfile,
   callNextPatient,
   getConsultationStatus,
@@ -31,6 +36,11 @@ router.put("/setup-profile", protectClinic, setupProfile);
 router.post("/forgot-password", otpRegistrationLimiter, sendResetOtp);
 router.post("/reset-password", otpVerificationLimiter, resetPassword);
 router.get("/dashboard-metrics", protectClinic, getDashboardMetrics);
+router.get("/today-patients", protectClinic, getTodayPatients);
+router.post("/today-patients-details", protectClinic, getTodayPatientDetails);
+router.post("/add-prescription", protectClinic, addPrescription);
+router.post("/patient-all-details", protectClinic, getPatientAllDetails);
+router.post("/patient-history", protectClinic, getPatientHistory);
 router.post("/call-next", protectClinic, callNextPatient);
 router.get("/consultation-status", protectClinic, getConsultationStatus);
 
