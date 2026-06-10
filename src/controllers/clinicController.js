@@ -565,6 +565,19 @@ const getPatientHistory = asyncHandler(async (req, res) => {
   });
 });
 
+const getClinicProfile = asyncHandler(async (req, res) => {
+  const clinic = await Clinic.findById(req.clinicId).select(
+    "clinicDisplayId clinicName doctorName specialization gender phone email registrationNumber address state city isActive isEmailVerified createdAt"
+  );
+
+  if (!clinic) {
+    res.status(404);
+    throw new Error("Clinic not found");
+  }
+
+  res.json({ success: true, data: clinic });
+});
+
 const getClinicPublicProfile = asyncHandler(async (req, res) => {
   const { clinicDisplayId } = req.params;
 
@@ -677,6 +690,7 @@ module.exports = {
   addPrescription,
   getPatientAllDetails,
   getPatientHistory,
+  getClinicProfile,
   getClinicPublicProfile,
   callNextPatient,
   getConsultationStatus,

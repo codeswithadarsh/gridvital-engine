@@ -15,6 +15,7 @@ const {
   addPrescription,
   getPatientAllDetails,
   getPatientHistory,
+  getClinicProfile,
   getClinicPublicProfile,
   callNextPatient,
   getConsultationStatus,
@@ -41,6 +42,7 @@ router.post("/today-patients-details", protectClinic, getTodayPatientDetails);
 router.post("/add-prescription", protectClinic, addPrescription);
 router.post("/patient-all-details", protectClinic, getPatientAllDetails);
 router.post("/patient-history", protectClinic, getPatientHistory);
+router.get("/profile", protectClinic, getClinicProfile);
 router.post("/call-next", protectClinic, callNextPatient);
 router.get("/consultation-status", protectClinic, getConsultationStatus);
 
