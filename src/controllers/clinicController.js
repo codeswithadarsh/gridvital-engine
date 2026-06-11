@@ -169,6 +169,12 @@ const loginClinic = asyncHandler(async (req, res) => {
 
   const token = generateToken(clinic._id);
 
+  const profileDone = !!(
+    clinic.doctorName &&
+    clinic.clinicName &&
+    clinic.isConsent
+  );
+
   res.json({
     success: true,
     token,
@@ -176,6 +182,7 @@ const loginClinic = asyncHandler(async (req, res) => {
       id: clinic._id,
       email: clinic.email,
       clinicDisplayId: clinic.clinicDisplayId,
+      profileDone,
     },
   });
 });
@@ -192,6 +199,7 @@ const setupProfile = asyncHandler(async (req, res) => {
     "state",
     "city",
     "defaultConsultationFee",
+    "isConsent",
   ];
 
   const updates = {};
@@ -199,6 +207,14 @@ const setupProfile = asyncHandler(async (req, res) => {
     if (req.body[field] !== undefined) {
       updates[field] = req.body[field];
     }
+  }
+
+  if (
+    req.body.isConsent !== undefined &&
+    (req.body.isConsent === 0 || req.body.isConsent === false)
+  ) {
+    res.status(400);
+    throw new Error("Please Accept terms");
   }
 
   if (Object.keys(updates).length === 0) {
@@ -675,6 +691,33 @@ const getConsultationStatus = asyncHandler(async (req, res) => {
   });
 });
 
+const getSubscriptionStatus = asyncHandler(async (req, res) => {
+  const clinic = await Clinic.findById(req.clinicId).select(
+    "subscriptionType subscriptionStartAt subscriptionExpiresAt subscriptionAmount"
+  );
+
+  if (!clinic) {
+    res.status(404);
+    throw new Error("Clinic not found");
+  }
+
+  const now = new Date();
+  const daysRemaining = clinic.subscriptionExpiresAt
+    ? Math.ceil((clinic.subscriptionExpiresAt - now) / (1000 * 60 * 60 * 24))
+    : 0;
+
+  res.json({
+    success: true,
+    data: {
+      subscriptionType: clinic.subscriptionType,
+      subscriptionStartAt: clinic.subscriptionStartAt,
+      subscriptionExpiresAt: clinic.subscriptionExpiresAt,
+      subscriptionAmount: clinic.subscriptionAmount,
+      daysRemaining: Math.max(0, daysRemaining),
+    },
+  });
+});
+
 module.exports = {
   registerClinic,
   verifyOtp,
@@ -694,4 +737,5 @@ module.exports = {
   getClinicPublicProfile,
   callNextPatient,
   getConsultationStatus,
+  getSubscriptionStatus,
 };

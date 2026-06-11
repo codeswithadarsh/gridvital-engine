@@ -19,6 +19,7 @@ const {
   getClinicPublicProfile,
   callNextPatient,
   getConsultationStatus,
+  getSubscriptionStatus,
 } = require("../controllers/clinicController");
 const { protectClinic } = require("../middlewares/authMiddleware");
 const {
@@ -45,5 +46,6 @@ router.post("/patient-history", protectClinic, getPatientHistory);
 router.get("/profile", protectClinic, getClinicProfile);
 router.post("/call-next", protectClinic, callNextPatient);
 router.get("/consultation-status", protectClinic, getConsultationStatus);
+router.get("/subscription", protectClinic, getSubscriptionStatus);
 
 module.exports = router;

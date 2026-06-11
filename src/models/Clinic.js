@@ -35,6 +35,18 @@ const clinicSchema = new mongoose.Schema(
     defaultConsultationFee: { type: Number },
     clinicDisplayId: { type: String, unique: true, sparse: true },
     isActive: { type: Boolean, default: true },
+    isConsent: { type: Boolean, default: false },
+    subscriptionType: {
+      type: String,
+      enum: ["FREE_TRIAL", "PAID_SUBSCRIBED", "EXPIRED"],
+      default: "FREE_TRIAL",
+    },
+    subscriptionStartAt: { type: Date, default: Date.now },
+    subscriptionExpiresAt: {
+      type: Date,
+      default: () => new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
+    },
+    subscriptionAmount: { type: Number, default: 0 },
   },
   { timestamps: true },
 );
