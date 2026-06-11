@@ -47,6 +47,11 @@ const clinicSchema = new mongoose.Schema(
       default: () => new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
     },
     subscriptionAmount: { type: Number, default: 0 },
+    role: {
+      type: String,
+      enum: ["CLINIC", "GRID_OPS", "GRID_RM"],
+      default: "CLINIC",
+    },
   },
   { timestamps: true },
 );

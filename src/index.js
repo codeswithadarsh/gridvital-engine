@@ -5,6 +5,7 @@ const helmet = require("helmet");
 const connectDB = require("./config/db");
 const clinicRoutes = require("./routes/clinicRoutes");
 const patientRoutes = require("./routes/patientRoutes");
+const opsRoutes = require("./routes/opsRoutes");
 const { notFound, errorHandler } = require("./middlewares/errorMiddleware");
 
 dotenv.config();
@@ -22,6 +23,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/clinic", clinicRoutes);
 app.use("/api/patient", patientRoutes);
+app.use("/api/ops", opsRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
